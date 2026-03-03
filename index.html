@@ -1,0 +1,1233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GeoQuest 🌍</title>
+
+  <!-- Google Fonts: Fredoka One + Nunito -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <!-- Tailwind Play CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            display: ['Fredoka One', 'cursive'],
+            body: ['Nunito', 'sans-serif'],
+          },
+          colors: {
+            game: {
+              bg: '#0a0e1a',
+              card: '#141929',
+              cardHover: '#1a2035',
+              border: '#252d45',
+            }
+          },
+          keyframes: {
+            wiggle: { '0%,100%': { transform: 'rotate(-3deg)' }, '50%': { transform: 'rotate(3deg)' } },
+            popIn: { '0%': { transform: 'scale(0.8)', opacity: '0' }, '70%': { transform: 'scale(1.05)' }, '100%': { transform: 'scale(1)', opacity: '1' } },
+            float: { '0%,100%': { transform: 'translateY(0px)' }, '50%': { transform: 'translateY(-15px)' } },
+            pulse2: { '0%,100%': { opacity: '0.3' }, '50%': { opacity: '0.6' } },
+            slideUp: { '0%': { transform: 'translateY(40px)', opacity: '0' }, '100%': { transform: 'translateY(0)', opacity: '1' } },
+            flashGreen: { '0%,100%': { backgroundColor: 'transparent' }, '50%': { backgroundColor: 'rgba(74,222,128,0.3)' } },
+            flashRed: { '0%,100%': { backgroundColor: 'transparent' }, '50%': { backgroundColor: 'rgba(248,113,113,0.3)' } },
+            confetti: { '0%': { transform: 'translateY(0) rotate(0deg)', opacity: '1' }, '100%': { transform: 'translateY(200px) rotate(720deg)', opacity: '0' } },
+            scoreCount: { '0%': { transform: 'scale(1.5)', color: '#4ade80' }, '100%': { transform: 'scale(1)', color: 'inherit' } },
+            timerPulse: { '0%,100%': { boxShadow: '0 0 0 0 rgba(239,68,68,0.4)' }, '50%': { boxShadow: '0 0 0 8px rgba(239,68,68,0)' } },
+          },
+          animation: {
+            wiggle: 'wiggle 0.4s ease-in-out',
+            popIn: 'popIn 0.4s ease-out forwards',
+            float: 'float 3s ease-in-out infinite',
+            pulse2: 'pulse2 3s ease-in-out infinite',
+            slideUp: 'slideUp 0.5s ease-out forwards',
+            flashGreen: 'flashGreen 0.6s ease-out',
+            flashRed: 'flashRed 0.6s ease-out',
+            confetti: 'confetti 1s ease-out forwards',
+            scoreCount: 'scoreCount 0.4s ease-out',
+            timerPulse: 'timerPulse 0.8s ease-in-out infinite',
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      background-color: #0a0e1a;
+      font-family: 'Nunito', sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    .font-display { font-family: 'Fredoka One', cursive; }
+
+    /* Animated background blobs */
+    .blob {
+      position: fixed;
+      border-radius: 50%;
+      filter: blur(80px);
+      opacity: 0.06;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .blob-1 { width: 500px; height: 500px; background: #6366f1; top: -100px; left: -100px; animation: float 8s ease-in-out infinite; }
+    .blob-2 { width: 400px; height: 400px; background: #f97316; bottom: -80px; right: -80px; animation: float 10s ease-in-out infinite 2s; }
+    .blob-3 { width: 300px; height: 300px; background: #22d3ee; top: 50%; left: 50%; animation: float 7s ease-in-out infinite 4s; }
+
+    /* Card 3D effect */
+    .card-3d {
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .card-3d:hover {
+      transform: translateY(-4px) rotate(-0.5deg);
+    }
+
+    /* Chunky button */
+    .btn-chunky {
+      transition: transform 0.1s, box-shadow 0.1s;
+      position: relative;
+      top: 0;
+    }
+    .btn-chunky:active {
+      transform: translateY(3px);
+      box-shadow: 0 2px 0 0 currentColor !important;
+    }
+
+    /* MCQ options */
+    .option-btn {
+      transition: all 0.15s ease;
+      border: 3px solid transparent;
+    }
+    .option-btn:hover:not(:disabled) {
+      transform: scale(1.02);
+      border-color: rgba(255,255,255,0.3);
+    }
+    .option-btn.correct {
+      background: rgba(74,222,128,0.25) !important;
+      border-color: #4ade80 !important;
+      animation: flashGreen 0.6s ease-out;
+    }
+    .option-btn.wrong {
+      background: rgba(248,113,113,0.25) !important;
+      border-color: #f87171 !important;
+      animation: wiggle 0.4s ease-in-out;
+    }
+    .option-btn.dimmed {
+      opacity: 0.4;
+    }
+
+    /* Timer ring */
+    .timer-ring { transform-origin: center; transform: rotate(-90deg); }
+    .timer-ring-circle { transition: stroke-dashoffset 1s linear; }
+
+    /* Map container */
+    #game-map { z-index: 1; }
+    .leaflet-container { background: #1a2540; }
+
+    /* Confetti particle */
+    .confetti-particle {
+      position: fixed;
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+      pointer-events: none;
+      z-index: 9999;
+      animation: confetti 1s ease-out forwards;
+    }
+
+    /* Score flash */
+    .score-flash {
+      animation: scoreCount 0.4s ease-out;
+    }
+
+    /* Screen transitions */
+    .screen { animation: slideUp 0.4s ease-out; }
+
+    /* Gauntlet color themes */
+    .theme-flags { --accent: #f97316; --accent-dim: rgba(249,115,22,0.2); --accent-glow: rgba(249,115,22,0.4); }
+    .theme-capitals { --accent: #a855f7; --accent-dim: rgba(168,85,247,0.2); --accent-glow: rgba(168,85,247,0.4); }
+    .theme-pin { --accent: #22d3ee; --accent-dim: rgba(34,211,238,0.2); --accent-glow: rgba(34,211,238,0.4); }
+    .theme-gauntlet { --accent: #facc15; --accent-dim: rgba(250,204,21,0.2); --accent-glow: rgba(250,204,21,0.4); }
+
+    /* Leaflet map fills parent height */
+    #game-map { width: 100%; height: 100%; }
+
+    .leaflet-marker-icon { border: none !important; background: transparent !important; }
+
+    /* Pin Me Down: map fills the flex container — no height override needed */
+
+    /* Animate question in */
+    .question-enter {
+      animation: slideUp 0.35s ease-out;
+    }
+
+    /* High score sparkle */
+    @keyframes sparkle {
+      0%,100% { transform: scale(1) rotate(0deg); }
+      50% { transform: scale(1.3) rotate(20deg); }
+    }
+    .sparkle { animation: sparkle 1.5s ease-in-out infinite; }
+
+    /* Feedback banner */
+    .feedback-banner {
+      animation: slideUp 0.3s ease-out;
+    }
+
+    /* Progress arc */
+    .progress-arc { filter: drop-shadow(0 0 6px var(--tw-shadow-color, #f97316)); }
+  </style>
+</head>
+<body class="relative">
+  <!-- Background blobs -->
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+  <div class="blob blob-3"></div>
+
+  <!-- Tailwind class sentinel (hidden) — forces CDN to compile all dynamic classes -->
+  <div class="hidden">
+    <div class="bg-orange-600 hover:bg-orange-500 border-b-4 border-orange-800 shadow-orange-500/20 text-orange-400 shadow-lg"></div>
+    <div class="bg-purple-600 hover:bg-purple-500 border-b-4 border-purple-800 shadow-purple-500/20 text-purple-400"></div>
+    <div class="bg-cyan-600 hover:bg-cyan-500 border-b-4 border-cyan-800 shadow-cyan-500/20 text-cyan-400"></div>
+    <div class="bg-yellow-600 hover:bg-yellow-500 border-b-4 border-yellow-800 shadow-yellow-500/20 text-yellow-400"></div>
+    <div class="bg-slate-700 hover:bg-slate-600 border-b-4 border-slate-800 shadow-slate-500/20"></div>
+    <div class="from-orange-900/40 to-orange-800/20 hover:from-orange-800/50 border-orange-800/40"></div>
+    <div class="from-purple-900/40 to-purple-800/20 hover:from-purple-800/50 border-purple-800/40"></div>
+    <div class="from-cyan-900/40 to-cyan-800/20 hover:from-cyan-800/50 border-cyan-800/40"></div>
+    <div class="hover:shadow-orange-500/20 hover:shadow-purple-500/20 hover:shadow-cyan-500/20 hover:shadow-yellow-500/20"></div>
+    <div class="sm:col-span-2 text-orange-400 text-purple-400 text-cyan-400 text-yellow-400"></div>
+    <div class="animate-popIn animate-float animate-wiggle animate-slideUp animate-confetti animate-scoreCount"></div>
+  </div>
+
+  <!-- App root -->
+  <div id="app" class="relative z-10"></div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Data -->
+  <script src="data.js"></script>
+
+  <script>
+  // ============================================================
+  //  UTILITIES
+  // ============================================================
+  function shuffle(arr) {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function haversineKm(lat1, lon1, lat2, lon2) {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2)**2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  }
+
+  // Time-based MCQ scoring: 75pts if answered within 1s, linear decay to 0 at 10s.
+  function calcTimedPoints(startTime) {
+    const elapsedMs = Date.now() - startTime;
+    if (elapsedMs <= 1000) return 75;
+    if (elapsedMs >= 10000) return 0;
+    // Linear decay: 75 → 0 over 1s–10s window
+    return Math.round(75 * (1 - (elapsedMs - 1000) / 9000));
+  }
+
+  function pinScore(guessLat, guessLng, actualLat, actualLng) {
+    const dist = haversineKm(guessLat, guessLng, actualLat, actualLng);
+    return Math.max(0, Math.round(100 * (1 - dist / 2000)));
+  }
+
+  // Wide-world scoring: map is always fully zoomed out so precision is limited.
+  // 0–500 km = 100 pts, decays linearly to 0 at 3500 km.
+  function pinScoreWide(guessLat, guessLng, actualLat, actualLng) {
+    const dist = haversineKm(guessLat, guessLng, actualLat, actualLng);
+    if (dist <= 500) return 100;
+    return Math.max(0, Math.round(100 * (1 - (dist - 500) / 3000)));
+  }
+
+  function flagUrl(code) {
+    return `https://flagcdn.com/w320/${code}.png`;
+  }
+
+  // High scores via localStorage
+  const HIGH_SCORES = {
+    get(mode) { return parseInt(localStorage.getItem(`geoquest_hs_${mode}`) || '0'); },
+    set(mode, score) {
+      if (score > this.get(mode)) {
+        localStorage.setItem(`geoquest_hs_${mode}`, score);
+        return true; // new record
+      }
+      return false;
+    }
+  };
+
+  // Confetti burst
+  function spawnConfetti(x, y, count = 12) {
+    const colors = ['#f97316','#a855f7','#22d3ee','#facc15','#4ade80','#f87171','#ffffff'];
+    for (let i = 0; i < count; i++) {
+      const el = document.createElement('div');
+      el.className = 'confetti-particle';
+      el.style.cssText = `
+        left: ${x + (Math.random()-0.5)*60}px;
+        top: ${y + (Math.random()-0.5)*40}px;
+        background: ${colors[Math.floor(Math.random()*colors.length)]};
+        transform: rotate(${Math.random()*360}deg);
+        animation-delay: ${Math.random()*0.3}s;
+      `;
+      document.body.appendChild(el);
+      setTimeout(() => el.remove(), 1200);
+    }
+  }
+
+  // Animate score number
+  function animateScore(el, from, to) {
+    const duration = 400;
+    const start = performance.now();
+    function step(now) {
+      const t = Math.min((now - start) / duration, 1);
+      el.textContent = Math.round(from + (to - from) * t);
+      if (t < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+
+  // ============================================================
+  //  ROUTER / STATE
+  // ============================================================
+  let currentScreen = null;
+  let leafletMap = null;
+  let timerInterval = null;
+
+  function clearTimer() {
+    if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+  }
+
+  function destroyMap() {
+    if (leafletMap) { leafletMap.remove(); leafletMap = null; }
+  }
+
+  function navigate(screen, opts = {}) {
+    clearTimer();
+    destroyMap();
+    currentScreen = screen;
+    render(screen, opts);
+  }
+
+  function render(screen, opts) {
+    const app = document.getElementById('app');
+    app.innerHTML = '';
+    app.className = 'relative z-10 min-h-screen';
+
+    switch (screen) {
+      case 'menu': renderMenu(app); break;
+      case 'flags': renderFlags(app, opts); break;
+      case 'capitals': renderCapitals(app, opts); break;
+      case 'pinmedown': renderPinMeDown(app, opts); break;
+      case 'gauntlet': renderGauntlet(app, opts); break;
+      case 'end': renderEndScreen(app, opts); break;
+      case 'gauntlet-between': renderGauntletBetween(app, opts); break;
+    }
+  }
+
+  // ============================================================
+  //  SHARED COMPONENTS
+  // ============================================================
+  function createTimerSVG(id, total, themeColor = '#f97316') {
+    const r = 28, cx = 34, cy = 34, circ = 2 * Math.PI * r;
+    return `
+      <svg width="68" height="68" viewBox="0 0 68 68" class="progress-arc">
+        <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#1e2a40" stroke-width="7"/>
+        <circle id="${id}-circle" cx="${cx}" cy="${cy}" r="${r}" fill="none"
+          stroke="${themeColor}" stroke-width="7" stroke-linecap="round"
+          stroke-dasharray="${circ}" stroke-dashoffset="0"
+          class="timer-ring" style="transform-origin:${cx}px ${cy}px; transform:rotate(-90deg); transition:stroke-dashoffset 1s linear;"/>
+        <text id="${id}-text" x="${cx}" y="${cy+5}" text-anchor="middle"
+          fill="white" font-family="Fredoka One,cursive" font-size="16">${total}</text>
+      </svg>
+    `;
+  }
+
+  function updateTimer(id, remaining, total, themeColor = '#f97316') {
+    const circle = document.getElementById(`${id}-circle`);
+    const text = document.getElementById(`${id}-text`);
+    if (!circle || !text) return;
+    const r = 28, circ = 2 * Math.PI * r;
+    const offset = circ * (1 - remaining / total);
+    circle.style.strokeDashoffset = offset;
+    text.textContent = remaining;
+
+    const ratio = remaining / total;
+    let color = themeColor;
+    if (ratio <= 0.33) {
+      color = '#ef4444';
+      circle.style.filter = `drop-shadow(0 0 4px #ef4444)`;
+    } else if (ratio <= 0.6) {
+      color = '#facc15';
+      circle.style.filter = `drop-shadow(0 0 4px #facc15)`;
+    } else {
+      circle.style.filter = `drop-shadow(0 0 4px ${themeColor})`;
+    }
+    circle.setAttribute('stroke', color);
+    text.setAttribute('fill', color);
+  }
+
+  function createScoreDisplay(current, best, label = 'SCORE', bestLabel = 'BEST', accentClass = 'text-orange-400') {
+    return `
+      <div class="flex items-center gap-6">
+        <div class="text-center">
+          <div class="text-xs font-bold text-slate-400 tracking-widest uppercase">${label}</div>
+          <div id="score-display" class="font-display text-3xl ${accentClass}">${current}</div>
+        </div>
+        <div class="w-px h-10 bg-slate-700"></div>
+        <div class="text-center">
+          <div class="text-xs font-bold text-slate-400 tracking-widest uppercase">${bestLabel}</div>
+          <div class="font-display text-3xl text-yellow-400">⭐ ${best}</div>
+        </div>
+      </div>
+    `;
+  }
+
+  function getWrongOptions(pool, correctValue, key, count = 3) {
+    const wrong = shuffle(pool.filter(item => item[key] !== correctValue));
+    return wrong.slice(0, count).map(item => item[key]);
+  }
+
+  function createOptionsHTML(options, theme) {
+    const colors = {
+      flags: 'from-orange-900/40 to-orange-800/20 hover:from-orange-800/50 border-orange-800/40',
+      capitals: 'from-purple-900/40 to-purple-800/20 hover:from-purple-800/50 border-purple-800/40',
+      pin: 'from-cyan-900/40 to-cyan-800/20 hover:from-cyan-800/50 border-cyan-800/40',
+    };
+    const cls = colors[theme] || colors.flags;
+    return options.map((opt, i) => `
+      <button class="option-btn w-full text-left px-5 py-4 rounded-2xl bg-gradient-to-r ${cls} border-2
+        font-body font-700 text-white text-base cursor-pointer"
+        data-value="${opt}" data-idx="${i}" onclick="selectOption(this)">
+        <span class="font-display text-lg mr-3 opacity-50">${['A','B','C','D'][i]}</span>
+        <span class="font-bold">${opt}</span>
+      </button>
+    `).join('');
+  }
+
+  // ============================================================
+  //  MAIN MENU
+  // ============================================================
+  function renderMenu(app) {
+    const hs = {
+      flags: HIGH_SCORES.get('flags'),
+      capitals: HIGH_SCORES.get('capitals'),
+      pinmedown: HIGH_SCORES.get('pinmedown'),
+      gauntlet: HIGH_SCORES.get('gauntlet'),
+    };
+
+    app.innerHTML = `
+      <div class="min-h-screen flex flex-col items-center px-4 py-10 screen">
+        <!-- Header -->
+        <div class="text-center mb-10 animate-popIn">
+          <div class="text-6xl mb-2">🌍</div>
+          <h1 class="font-display text-6xl md:text-7xl text-white tracking-wide" style="text-shadow: 0 0 40px rgba(99,102,241,0.6)">GeoQuest</h1>
+          <p class="text-slate-400 font-body text-lg mt-2">How well do you know our world?</p>
+        </div>
+
+        <!-- Game tiles -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-5 w-full max-w-2xl">
+          ${menuTile('🏳️', 'Flags of Freedom', 'Match flags to their countries', 'flags', 'from-orange-600 to-red-600', hs.flags, 'orange')}
+          ${menuTile('🗺️', 'Capital IQ', 'Name that capital city!', 'capitals', 'from-purple-600 to-violet-700', hs.capitals, 'purple')}
+          ${menuTile('📍', 'Pin Me Down', 'Drop a pin on the world map', 'pinmedown', 'from-cyan-600 to-teal-700', hs.pinmedown, 'cyan')}
+          ${menuTile('⚔️', 'Gauntlet', 'All 3 games — can you survive?', 'gauntlet', 'from-yellow-500 to-amber-600', hs.gauntlet, 'yellow', true)}
+        </div>
+
+        <p class="text-slate-600 text-sm mt-10 font-body">Click a game to start your adventure!</p>
+      </div>
+    `;
+  }
+
+  function menuTile(emoji, title, desc, mode, gradient, hs, color, wide = false) {
+    return `
+      <div class="card-3d bg-game-card rounded-3xl overflow-hidden cursor-pointer border border-game-border
+        shadow-lg hover:shadow-${color}-500/20 ${wide ? 'sm:col-span-2' : ''}"
+        onclick="navigate('${mode}')" style="box-shadow: 0 4px 0 rgba(30,42,53,1)">
+        <div class="bg-gradient-to-br ${gradient} p-1 rounded-t-3xl">
+          <div class="bg-game-card rounded-3xl p-6">
+            <div class="flex items-center justify-between">
+              <div>
+                <div class="text-4xl mb-2 animate-float" style="animation-delay:${Math.random()*2}s">${emoji}</div>
+                <h2 class="font-display text-2xl text-white">${title}</h2>
+                <p class="text-slate-400 text-sm font-body mt-1">${desc}</p>
+              </div>
+              <div class="text-right">
+                <div class="text-xs text-slate-500 uppercase tracking-widest font-bold">Best</div>
+                <div class="font-display text-2xl text-yellow-400">⭐ ${hs}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // ============================================================
+  //  FLAGS OF FREEDOM
+  // ============================================================
+  let flagsState = {};
+
+  function renderFlags(app, opts = {}) {
+    const { gauntletMode = false, baseScore = 0, onComplete = null } = opts;
+    const shuffled = shuffle(COUNTRIES);
+    flagsState = {
+      questions: shuffled,
+      idx: 0,
+      score: 0,
+      timeLeft: 30,
+      total: 30,
+      locked: false,
+      gauntletMode,
+      baseScore,
+      onComplete,
+    };
+
+    app.innerHTML = `
+      <div class="min-h-screen flex flex-col theme-flags screen">
+        ${renderGameHeader('Flags of Freedom', '🏳️', 'flags', gauntletMode, baseScore)}
+        <div id="flags-content" class="flex-1 flex flex-col items-center justify-center px-4 py-6 max-w-xl mx-auto w-full"></div>
+      </div>
+    `;
+    renderFlagsQuestion();
+    startFlagsTimer();
+  }
+
+  function renderFlagsQuestion() {
+    const { questions, idx, score, timeLeft, total, gauntletMode, baseScore } = flagsState;
+    const country = questions[idx % questions.length];
+    const wrongs = getWrongOptions(COUNTRIES, country.name, 'name', 3);
+    const options = shuffle([country.name, ...wrongs]);
+    flagsState.currentAnswer = country.name;
+    flagsState.currentOptions = options;
+    flagsState.questionStartTime = Date.now();
+
+    const hs = HIGH_SCORES.get('flags');
+    const displayScore = gauntletMode ? baseScore + score : score;
+    const displayBest = gauntletMode ? HIGH_SCORES.get('gauntlet') : hs;
+    const bestLabel = gauntletMode ? 'GAUNTLET BEST' : 'BEST';
+
+    document.getElementById('flags-content').innerHTML = `
+      <div class="w-full question-enter">
+        <div class="flex items-center justify-between mb-6">
+          ${createScoreDisplay(displayScore, displayBest, 'SCORE', bestLabel, 'text-orange-400')}
+          ${createTimerSVG('flags-timer', timeLeft, '#f97316')}
+        </div>
+
+        <!-- Flag -->
+        <div class="bg-game-card rounded-3xl p-6 mb-5 border border-game-border flex items-center justify-center"
+          style="min-height:200px; box-shadow: 0 0 30px rgba(249,115,22,0.15)">
+          <img src="${flagUrl(country.code)}" alt="Flag" class="max-h-40 max-w-full rounded-xl shadow-xl"
+            onerror="this.style.fontSize='80px'; this.src=''; this.alt='🏳️';" />
+        </div>
+
+        <div class="flex items-center justify-between mb-3">
+          <p class="text-slate-400 font-body text-sm uppercase tracking-widest font-bold">Which country?</p>
+          <span class="text-xs font-body text-slate-500 bg-slate-800/60 rounded-full px-3 py-1">⚡ Answer fast for more points!</span>
+        </div>
+
+        <!-- Options -->
+        <div id="flags-options" class="grid grid-cols-1 gap-3">
+          ${createOptionsHTML(options, 'flags')}
+        </div>
+
+        <!-- Feedback -->
+        <div id="flags-feedback" class="mt-4 h-12 flex items-center justify-center"></div>
+      </div>
+    `;
+
+    // Sync timer display
+    updateTimer('flags-timer', flagsState.timeLeft, flagsState.total, '#f97316');
+  }
+
+  window.selectOption = function(btn) {
+    if (!btn) return;
+    const screen = currentScreen;
+    if (screen === 'flags') flagsSelect(btn);
+    else if (screen === 'capitals') capitalsSelect(btn);
+  };
+
+  function flagsSelect(btn) {
+    if (flagsState.locked) return;
+    flagsState.locked = true;
+    const chosen = btn.dataset.value;
+    const correct = flagsState.currentAnswer;
+
+    highlightOptions('flags-options', chosen, correct);
+    if (chosen === correct) {
+      const pts = calcTimedPoints(flagsState.questionStartTime);
+      flagsState.score += pts;
+      showFeedback('flags-feedback', true, `+${pts} pts`);
+      spawnConfetti(btn.getBoundingClientRect().left + 80, btn.getBoundingClientRect().top, 10);
+    } else {
+      showFeedback('flags-feedback', false, `That was ${correct}`);
+    }
+    updateScoreDisplay('flags', flagsState);
+
+    setTimeout(() => {
+      flagsState.idx++;
+      flagsState.locked = false;
+      renderFlagsQuestion();
+    }, 900);
+  }
+
+  function startFlagsTimer() {
+    clearTimer();
+    updateTimer('flags-timer', flagsState.timeLeft, flagsState.total, '#f97316');
+    timerInterval = setInterval(() => {
+      flagsState.timeLeft--;
+      updateTimer('flags-timer', flagsState.timeLeft, flagsState.total, '#f97316');
+      if (flagsState.timeLeft <= 0) {
+        clearTimer();
+        endGame('flags', flagsState);
+      }
+    }, 1000);
+  }
+
+  // ============================================================
+  //  CAPITAL IQ
+  // ============================================================
+  let capitalsState = {};
+
+  function renderCapitals(app, opts = {}) {
+    const { gauntletMode = false, baseScore = 0, onComplete = null } = opts;
+    const shuffled = shuffle(COUNTRIES);
+    capitalsState = {
+      questions: shuffled,
+      idx: 0,
+      score: 0,
+      timeLeft: 30,
+      total: 30,
+      locked: false,
+      gauntletMode,
+      baseScore,
+      onComplete,
+    };
+
+    app.innerHTML = `
+      <div class="min-h-screen flex flex-col theme-capitals screen">
+        ${renderGameHeader('Capital IQ', '🗺️', 'capitals', gauntletMode, baseScore)}
+        <div id="capitals-content" class="flex-1 flex flex-col items-center justify-center px-4 py-6 max-w-xl mx-auto w-full"></div>
+      </div>
+    `;
+    renderCapitalsQuestion();
+    startCapitalsTimer();
+  }
+
+  function renderCapitalsQuestion() {
+    const { questions, idx, score, timeLeft, total, gauntletMode, baseScore } = capitalsState;
+    const country = questions[idx % questions.length];
+    const wrongs = getWrongOptions(COUNTRIES, country.capital, 'capital', 3);
+    const options = shuffle([country.capital, ...wrongs]);
+    capitalsState.currentAnswer = country.capital;
+    capitalsState.currentOptions = options;
+    capitalsState.questionStartTime = Date.now();
+
+    const hs = HIGH_SCORES.get('capitals');
+    const displayScore = gauntletMode ? baseScore + score : score;
+    const displayBest = gauntletMode ? HIGH_SCORES.get('gauntlet') : hs;
+    const bestLabel = gauntletMode ? 'GAUNTLET BEST' : 'BEST';
+
+    document.getElementById('capitals-content').innerHTML = `
+      <div class="w-full question-enter">
+        <div class="flex items-center justify-between mb-6">
+          ${createScoreDisplay(displayScore, displayBest, 'SCORE', bestLabel, 'text-purple-400')}
+          ${createTimerSVG('capitals-timer', timeLeft, '#a855f7')}
+        </div>
+
+        <!-- Country name -->
+        <div class="bg-game-card rounded-3xl p-8 mb-5 border border-game-border text-center"
+          style="box-shadow: 0 0 30px rgba(168,85,247,0.15)">
+          <div class="text-5xl mb-3">
+            <img src="${flagUrl(country.code)}" alt="" class="h-12 inline-block rounded shadow-md" onerror="this.style.display='none'" />
+          </div>
+          <h2 class="font-display text-4xl text-white">${country.name}</h2>
+        </div>
+
+        <div class="flex items-center justify-between mb-3">
+          <p class="text-slate-400 font-body text-sm uppercase tracking-widest font-bold">Capital city?</p>
+          <span class="text-xs font-body text-slate-500 bg-slate-800/60 rounded-full px-3 py-1">⚡ Answer fast for more points!</span>
+        </div>
+
+        <!-- Options -->
+        <div id="capitals-options" class="grid grid-cols-1 gap-3">
+          ${createOptionsHTML(options, 'capitals')}
+        </div>
+
+        <!-- Feedback -->
+        <div id="capitals-feedback" class="mt-4 h-12 flex items-center justify-center"></div>
+      </div>
+    `;
+
+    updateTimer('capitals-timer', capitalsState.timeLeft, capitalsState.total, '#a855f7');
+  }
+
+  function capitalsSelect(btn) {
+    if (capitalsState.locked) return;
+    capitalsState.locked = true;
+    const chosen = btn.dataset.value;
+    const correct = capitalsState.currentAnswer;
+
+    highlightOptions('capitals-options', chosen, correct);
+    if (chosen === correct) {
+      const pts = calcTimedPoints(capitalsState.questionStartTime);
+      capitalsState.score += pts;
+      showFeedback('capitals-feedback', true, `+${pts} pts`);
+      spawnConfetti(btn.getBoundingClientRect().left + 80, btn.getBoundingClientRect().top, 10);
+    } else {
+      showFeedback('capitals-feedback', false, `It was ${correct}`);
+    }
+    updateScoreDisplay('capitals', capitalsState);
+
+    setTimeout(() => {
+      capitalsState.idx++;
+      capitalsState.locked = false;
+      renderCapitalsQuestion();
+    }, 900);
+  }
+
+  function startCapitalsTimer() {
+    clearTimer();
+    updateTimer('capitals-timer', capitalsState.timeLeft, capitalsState.total, '#a855f7');
+    timerInterval = setInterval(() => {
+      capitalsState.timeLeft--;
+      updateTimer('capitals-timer', capitalsState.timeLeft, capitalsState.total, '#a855f7');
+      if (capitalsState.timeLeft <= 0) {
+        clearTimer();
+        endGame('capitals', capitalsState);
+      }
+    }, 1000);
+  }
+
+  // ============================================================
+  //  PIN ME DOWN
+  // ============================================================
+  let pinState = {};
+
+  function renderPinMeDown(app, opts = {}) {
+    const { gauntletMode = false, baseScore = 0, onComplete = null } = opts;
+    const shuffled = shuffle(GEO_LOCATIONS);
+    pinState = {
+      questions: shuffled,
+      idx: 0,
+      score: 0,
+      timeLeft: 60,
+      total: 60,
+      pin: null,
+      submitted: false,
+      gauntletMode,
+      baseScore,
+      onComplete,
+    };
+
+    app.innerHTML = `
+      <div class="flex flex-col theme-pin screen" style="height:100vh;overflow:hidden;">
+        ${renderGameHeader('Pin Me Down', '📍', 'pinmedown', gauntletMode, baseScore)}
+        <div id="pin-content" class="flex-1 flex flex-col px-3 py-2 w-full" style="min-height:0;overflow:hidden;"></div>
+      </div>
+    `;
+    renderPinQuestion();
+    startPinTimer();
+  }
+
+  function renderPinQuestion() {
+    const { questions, idx, score, timeLeft, total, gauntletMode, baseScore } = pinState;
+    const loc = questions[idx % questions.length];
+
+    const hs = HIGH_SCORES.get('pinmedown');
+    const displayScore = gauntletMode ? baseScore + score : score;
+    const displayBest = gauntletMode ? HIGH_SCORES.get('gauntlet') : hs;
+    const bestLabel = gauntletMode ? 'GAUNTLET BEST' : 'BEST';
+
+    document.getElementById('pin-content').innerHTML = `
+      <div class="w-full flex flex-col" style="height:100%;">
+        <!-- Top strip: score + location info + timer -->
+        <div class="flex items-center gap-3 mb-2 flex-shrink-0">
+          <!-- Score -->
+          <div class="flex items-center gap-3 bg-game-card rounded-2xl px-4 py-2 border border-game-border flex-shrink-0">
+            <div class="text-center">
+              <div class="text-xs font-bold text-slate-400 tracking-widest uppercase">Score</div>
+              <div id="score-display" class="font-display text-2xl text-cyan-400">${displayScore}</div>
+            </div>
+            <div class="w-px h-8 bg-slate-700"></div>
+            <div class="text-center">
+              <div class="text-xs font-bold text-slate-400 tracking-widest uppercase">${bestLabel}</div>
+              <div class="font-display text-2xl text-yellow-400">⭐ ${displayBest}</div>
+            </div>
+          </div>
+
+          <!-- Location card (inline) -->
+          <div class="flex-1 bg-game-card rounded-2xl border border-game-border overflow-hidden flex items-center gap-3 px-3 py-2" style="box-shadow: 0 0 20px rgba(34,211,238,0.12)">
+            <img id="loc-img" src="${loc.imageUrl}" alt="${loc.name}"
+              style="width:80px;height:60px;object-fit:cover;border-radius:12px;flex-shrink:0;"
+              onerror="this.onerror=null; this.src='${loc.fallbackUrl}';" />
+            <div class="min-w-0">
+              <div id="loc-name" class="font-display text-xl text-white leading-tight truncate">${loc.name}</div>
+              <div id="loc-hint" class="text-slate-400 text-xs font-body mt-0.5 truncate">${loc.hint || 'Find this location on the map'}</div>
+            </div>
+            <div class="ml-auto flex-shrink-0 text-slate-500 text-xs font-body pr-1">
+              <span class="text-cyan-400 font-bold">Click map</span> to pin!
+            </div>
+          </div>
+
+          <!-- Timer -->
+          <div class="flex-shrink-0">
+            ${createTimerSVG('pin-timer', timeLeft, '#22d3ee')}
+          </div>
+        </div>
+
+        <!-- Map — fills remaining vertical space -->
+        <div class="flex-1 relative" style="min-height:0">
+          <div id="game-map" class="rounded-3xl overflow-hidden border-2 border-cyan-800/40 w-full h-full"></div>
+          <!-- Overlay feedback (shown after pin submit) -->
+          <div id="pin-feedback" class="absolute bottom-4 left-1/2 -translate-x-1/2 z-50 pointer-events-none"></div>
+        </div>
+      </div>
+    `;
+
+    updateTimer('pin-timer', pinState.timeLeft, pinState.total, '#22d3ee');
+    initMap();
+  }
+
+  function initMap() {
+    destroyMap();
+    // Inject dark tile filter once (idempotent)
+    if (!document.getElementById('leaflet-dark-style')) {
+      const style = document.createElement('style');
+      style.id = 'leaflet-dark-style';
+      style.textContent = '.leaflet-tile { filter: invert(1) hue-rotate(180deg) brightness(0.82) saturate(0.75); }';
+      document.head.appendChild(style);
+    }
+
+    leafletMap = L.map('game-map', {
+      center: [20, 10],
+      zoom: 2,
+      minZoom: 2,
+      maxZoom: 2,           // Lock zoom — whole world always visible, no scrolling needed
+      zoomControl: false,
+      scrollWheelZoom: false,
+      doubleClickZoom: false,
+      touchZoom: false,
+      dragging: false,      // World map is fully visible; no dragging needed
+    });
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors',
+      maxZoom: 19,
+    }).addTo(leafletMap);
+
+    pinState.userMarker = null;
+    pinState.actualMarker = null;
+    pinState.polyline = null;
+
+    // Single click = auto-submit immediately (no separate submit button)
+    leafletMap.on('click', function(e) {
+      if (pinState.submitted || pinState.gameOver) return;
+      const { lat, lng } = e.latlng;
+      pinState.pin = [lat, lng];
+      submitPin();
+    });
+  }
+
+  window.submitPin = function() {
+    if (!pinState.pin || pinState.submitted || pinState.gameOver) return;
+    pinState.submitted = true;
+    clearTimer();
+
+    const loc = pinState.questions[pinState.idx % pinState.questions.length];
+    const [guessLat, guessLng] = pinState.pin;
+    // At whole-world zoom, max useful guess error is ~3000km; scale scoring accordingly
+    const points = pinScoreWide(guessLat, guessLng, loc.lat, loc.lng);
+    const distKm = Math.round(haversineKm(guessLat, guessLng, loc.lat, loc.lng));
+    pinState.score += points;
+
+    // Drop user pin marker
+    const pinIcon = L.divIcon({
+      html: '<div style="font-size:26px;line-height:1;filter:drop-shadow(0 2px 6px rgba(0,0,0,0.9))">📍</div>',
+      className: '', iconAnchor: [13, 26],
+    });
+    if (pinState.userMarker) {
+      pinState.userMarker.setLatLng([guessLat, guessLng]);
+    } else {
+      pinState.userMarker = L.marker([guessLat, guessLng], { icon: pinIcon }).addTo(leafletMap);
+    }
+
+    // Show actual location
+    const actualIcon = L.divIcon({
+      html: '<div style="font-size:26px;line-height:1;filter:drop-shadow(0 2px 6px rgba(0,0,0,0.9))">⭐</div>',
+      className: '', iconAnchor: [13, 13],
+    });
+    pinState.actualMarker = L.marker([loc.lat, loc.lng], { icon: actualIcon }).addTo(leafletMap);
+
+    // Draw connecting line
+    pinState.polyline = L.polyline([[guessLat, guessLng], [loc.lat, loc.lng]], {
+      color: '#22d3ee', weight: 2, dashArray: '6,5', opacity: 0.9
+    }).addTo(leafletMap);
+
+    // Show overlay feedback (no button — auto-advances)
+    const feedback = document.getElementById('pin-feedback');
+    if (feedback) {
+      const scoreColor = points >= 75 ? '#4ade80' : points >= 45 ? '#facc15' : points >= 20 ? '#f97316' : '#f87171';
+      const scoreEmoji = points >= 75 ? '🎯' : points >= 45 ? '👍' : points >= 20 ? '😅' : '😬';
+      feedback.style.pointerEvents = 'none';
+      feedback.innerHTML = `
+        <div class="feedback-banner rounded-2xl px-6 py-3 border border-cyan-800/60 text-center"
+          style="background:rgba(20,25,41,0.95);backdrop-filter:blur(8px);white-space:nowrap;">
+          <div class="font-display text-2xl" style="color:${scoreColor}">${scoreEmoji} +${points} pts</div>
+          <div class="text-slate-300 text-sm font-body">${distKm.toLocaleString()} km away</div>
+        </div>
+      `;
+    }
+
+    updateScoreDisplay('pin', pinState);
+    if (points >= 60) spawnConfetti(window.innerWidth/2, window.innerHeight * 0.6, 12);
+
+    // Auto-advance after 750ms
+    setTimeout(() => {
+      if (pinState.gameOver) return;
+      nextPinQuestion();
+    }, 750);
+  };
+
+  window.nextPinQuestion = function() {
+    if (pinState.timeLeft <= 0) {
+      pinState.gameOver = true;
+      endGame('pinmedown', pinState);
+      return;
+    }
+    pinState.idx++;
+    pinState.pin = null;
+    pinState.submitted = false;
+    // Remove old markers from map without destroying the map
+    if (leafletMap) {
+      if (pinState.userMarker) { leafletMap.removeLayer(pinState.userMarker); pinState.userMarker = null; }
+      if (pinState.actualMarker) { leafletMap.removeLayer(pinState.actualMarker); pinState.actualMarker = null; }
+      if (pinState.polyline) { leafletMap.removeLayer(pinState.polyline); pinState.polyline = null; }
+    }
+    // Update location info strip without re-rendering the whole layout
+    const loc = pinState.questions[pinState.idx % pinState.questions.length];
+    const imgEl = document.getElementById('loc-img');
+    if (imgEl) {
+      imgEl.onerror = null;
+      imgEl.src = loc.imageUrl;
+      imgEl.onerror = function() { this.onerror=null; this.src = loc.fallbackUrl; };
+      imgEl.alt = loc.name;
+    }
+    const nameEl = document.getElementById('loc-name');
+    if (nameEl) nameEl.textContent = loc.name;
+    const hintEl = document.getElementById('loc-hint');
+    if (hintEl) hintEl.textContent = loc.hint || 'Find this location on the map';
+    const feedbackEl = document.getElementById('pin-feedback');
+    if (feedbackEl) feedbackEl.innerHTML = '';
+    // Resume timer (continues from remaining timeLeft)
+    startPinTimer();
+  };
+
+  function startPinTimer() {
+    clearTimer();
+    updateTimer('pin-timer', pinState.timeLeft, pinState.total, '#22d3ee');
+    timerInterval = setInterval(() => {
+      pinState.timeLeft--;
+      updateTimer('pin-timer', pinState.timeLeft, pinState.total, '#22d3ee');
+      if (pinState.timeLeft <= 0) {
+        clearTimer();
+        if (!pinState.submitted) {
+          pinState.gameOver = true;
+          endGame('pinmedown', pinState);
+        }
+        // If submitted, user is reviewing — nextPinQuestion will detect timeLeft=0 and end
+      }
+    }, 1000);
+  }
+
+  // ============================================================
+  //  GAUNTLET
+  // ============================================================
+  let gauntletState = {};
+
+  function renderGauntlet(app, opts = {}) {
+    gauntletState = {
+      phase: 'flags',
+      flagsScore: 0,
+      capitalsScore: 0,
+      pinScore: 0,
+    };
+    // Start with flags
+    const cumulative = 0;
+    navigate('flags', {
+      gauntletMode: true,
+      baseScore: cumulative,
+      onComplete: onFlagsComplete,
+    });
+  }
+
+  function onFlagsComplete(score) {
+    gauntletState.flagsScore = score;
+    renderGauntletBetween(document.getElementById('app'), {
+      title: 'Flags Done!',
+      emoji: '🏳️',
+      subScore: score,
+      cumulative: gauntletState.flagsScore,
+      nextLabel: 'Capital IQ →',
+      nextColor: 'purple',
+      onNext: () => navigate('capitals', {
+        gauntletMode: true,
+        baseScore: gauntletState.flagsScore,
+        onComplete: onCapitalsComplete,
+      }),
+    });
+  }
+
+  function onCapitalsComplete(score) {
+    gauntletState.capitalsScore = score;
+    const cumulative = gauntletState.flagsScore + score;
+    renderGauntletBetween(document.getElementById('app'), {
+      title: 'Capital IQ Done!',
+      emoji: '🗺️',
+      subScore: score,
+      cumulative,
+      nextLabel: 'Pin Me Down →',
+      nextColor: 'cyan',
+      onNext: () => navigate('pinmedown', {
+        gauntletMode: true,
+        baseScore: cumulative,
+        onComplete: onPinComplete,
+      }),
+    });
+  }
+
+  function onPinComplete(score) {
+    gauntletState.pinScore = score;
+    const total = gauntletState.flagsScore + gauntletState.capitalsScore + score;
+    const isNewRecord = HIGH_SCORES.set('gauntlet', total);
+    navigate('end', {
+      mode: 'gauntlet',
+      score: total,
+      highScore: HIGH_SCORES.get('gauntlet'),
+      isNewRecord,
+      emoji: '⚔️',
+      title: 'Gauntlet Complete!',
+      breakdown: [
+        { label: 'Flags of Freedom', score: gauntletState.flagsScore },
+        { label: 'Capital IQ', score: gauntletState.capitalsScore },
+        { label: 'Pin Me Down', score: gauntletState.pinScore },
+      ],
+      onReplay: () => navigate('gauntlet'),
+      onMenu: () => navigate('menu'),
+    });
+  }
+
+  const BETWEEN_BTN_STYLES = {
+    purple: 'bg-purple-600 hover:bg-purple-500 border-b-4 border-purple-800 shadow-purple-500/20',
+    cyan: 'bg-cyan-600 hover:bg-cyan-500 border-b-4 border-cyan-800 shadow-cyan-500/20',
+    yellow: 'bg-yellow-600 hover:bg-yellow-500 border-b-4 border-yellow-800 shadow-yellow-500/20',
+    orange: 'bg-orange-600 hover:bg-orange-500 border-b-4 border-orange-800 shadow-orange-500/20',
+  };
+
+  function renderGauntletBetween(app, { title, emoji, subScore, cumulative, nextLabel, nextColor, onNext }) {
+    const btnCls = BETWEEN_BTN_STYLES[nextColor] || BETWEEN_BTN_STYLES.yellow;
+    app.innerHTML = `
+      <div class="min-h-screen flex flex-col items-center justify-center px-4 py-10 theme-gauntlet screen">
+        <div class="bg-game-card rounded-3xl p-10 border border-yellow-600/30 text-center max-w-md w-full"
+          style="box-shadow: 0 0 60px rgba(250,204,21,0.15)">
+          <div class="text-6xl mb-4 animate-float">${emoji}</div>
+          <h2 class="font-display text-4xl text-white mb-2">${title}</h2>
+          <p class="text-slate-400 font-body mb-6">Sub-game score: <span class="text-white font-bold">${subScore}</span></p>
+
+          <div class="bg-yellow-500/10 rounded-2xl p-5 mb-8 border border-yellow-500/30">
+            <div class="text-slate-400 text-sm font-body uppercase tracking-widest mb-1">Cumulative Score</div>
+            <div class="font-display text-5xl text-yellow-400">⚔️ ${cumulative}</div>
+          </div>
+
+          <button onclick="window._gauntletNext()"
+            class="btn-chunky w-full py-4 rounded-2xl font-display text-xl text-white shadow-lg ${btnCls}">
+            ${nextLabel}
+          </button>
+        </div>
+      </div>
+    `;
+    window._gauntletNext = onNext;
+  }
+
+  // ============================================================
+  //  END SCREEN
+  // ============================================================
+  const END_COLORS = {
+    flags:     { textCls: 'text-orange-400', btnCls: 'bg-orange-600 hover:bg-orange-500 border-b-4 border-orange-800 shadow-orange-500/20', glow: 'rgba(249,115,22,0.25)' },
+    capitals:  { textCls: 'text-purple-400', btnCls: 'bg-purple-600 hover:bg-purple-500 border-b-4 border-purple-800 shadow-purple-500/20', glow: 'rgba(168,85,247,0.25)' },
+    pinmedown: { textCls: 'text-cyan-400',   btnCls: 'bg-cyan-600 hover:bg-cyan-500 border-b-4 border-cyan-800 shadow-cyan-500/20',   glow: 'rgba(34,211,238,0.25)' },
+    gauntlet:  { textCls: 'text-yellow-400', btnCls: 'bg-yellow-500 hover:bg-yellow-400 border-b-4 border-yellow-700 shadow-yellow-500/20', glow: 'rgba(250,204,21,0.25)' },
+  };
+
+  function renderEndScreen(app, { mode, score, highScore, isNewRecord, emoji, title, breakdown, onReplay, onMenu }) {
+    const { textCls, btnCls, glow } = END_COLORS[mode] || END_COLORS.flags;
+
+    const breakdownHTML = breakdown ? `
+      <div class="mt-4 space-y-2">
+        ${breakdown.map(b => `
+          <div class="flex justify-between items-center py-2 px-4 rounded-xl bg-white/5">
+            <span class="text-slate-300 font-body">${b.label}</span>
+            <span class="font-display ${textCls} text-xl">${b.score}</span>
+          </div>
+        `).join('')}
+      </div>
+    ` : '';
+
+    app.innerHTML = `
+      <div class="min-h-screen flex flex-col items-center justify-center px-4 py-10 screen">
+        <div class="bg-game-card rounded-3xl p-10 border border-game-border text-center max-w-md w-full"
+          style="box-shadow: 0 0 80px ${glow};">
+
+          <div class="text-7xl mb-4 animate-float">${emoji}</div>
+          ${isNewRecord ? '<div class="inline-block bg-yellow-400/20 border border-yellow-400/50 rounded-full px-4 py-1 text-yellow-400 font-display text-sm mb-3 sparkle">🏆 NEW RECORD!</div>' : ''}
+          <h2 class="font-display text-4xl text-white mb-2">${title}</h2>
+
+          <div class="mt-6 mb-4">
+            <div class="text-slate-400 text-sm font-body uppercase tracking-widest mb-1">Final Score</div>
+            <div id="end-score" class="font-display text-7xl ${textCls}">0</div>
+          </div>
+
+          <div class="text-slate-400 font-body text-sm mb-2">
+            Best: <span class="text-yellow-400 font-bold">⭐ ${highScore}</span>
+          </div>
+
+          ${breakdownHTML}
+
+          <div class="flex flex-col gap-3 mt-8">
+            <button onclick="window._endReplay()"
+              class="btn-chunky w-full py-4 rounded-2xl font-display text-xl text-white shadow-lg ${btnCls}">
+              🔄 Play Again
+            </button>
+            <button onclick="window._endMenu()"
+              class="btn-chunky w-full py-4 rounded-2xl font-display text-xl text-white
+                bg-slate-700 hover:bg-slate-600 border-b-4 border-slate-800">
+              🏠 Main Menu
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Animate score counting up
+    const endScoreEl = document.getElementById('end-score');
+    setTimeout(() => animateScore(endScoreEl, 0, score), 300);
+    if (score > 0 && isNewRecord) {
+      setTimeout(() => spawnConfetti(window.innerWidth/2, 200, 30), 500);
+    }
+
+    window._endReplay = onReplay;
+    window._endMenu = onMenu;
+  }
+
+  // ============================================================
+  //  SHARED HELPERS
+  // ============================================================
+  function renderGameHeader(title, emoji, mode, gauntletMode, baseScore) {
+    const colorMap = {
+      flags: 'border-orange-800/40 text-orange-400',
+      capitals: 'border-purple-800/40 text-purple-400',
+      pinmedown: 'border-cyan-800/40 text-cyan-400',
+    };
+    const cls = colorMap[mode] || colorMap.flags;
+    return `
+      <div class="flex items-center justify-between px-5 py-3 border-b ${cls}
+        backdrop-blur-sm" style="background:rgba(20,25,41,0.7)">
+        <div class="flex items-center gap-2">
+          <span class="text-2xl">${emoji}</span>
+          <span class="font-display text-xl text-white">${title}</span>
+          ${gauntletMode ? '<span class="ml-2 bg-yellow-500/20 border border-yellow-500/40 rounded-full px-2 py-0.5 text-yellow-400 text-xs font-bold">⚔️ GAUNTLET</span>' : ''}
+        </div>
+        <button onclick="navigate('menu')"
+          class="text-slate-400 hover:text-white font-body text-sm transition-colors px-3 py-1 rounded-xl hover:bg-white/10">
+          ✕ Quit
+        </button>
+      </div>
+    `;
+  }
+
+  function highlightOptions(containerId, chosen, correct) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.querySelectorAll('.option-btn').forEach(btn => {
+      btn.disabled = true;
+      const val = btn.dataset.value;
+      if (val === correct) {
+        btn.classList.add('correct');
+      } else if (val === chosen && chosen !== correct) {
+        btn.classList.add('wrong');
+      } else {
+        btn.classList.add('dimmed');
+      }
+    });
+  }
+
+  function showFeedback(feedbackId, correct, message) {
+    const el = document.getElementById(feedbackId);
+    if (!el) return;
+    el.innerHTML = `
+      <div class="feedback-banner inline-flex items-center gap-2 px-5 py-2 rounded-2xl font-display text-lg
+        ${correct
+          ? 'bg-green-500/20 border border-green-500/40 text-green-400'
+          : 'bg-red-500/20 border border-red-500/40 text-red-400'}">
+        ${correct ? '✅' : '❌'} ${message}
+      </div>
+    `;
+  }
+
+  function updateScoreDisplay(mode, state) {
+    const el = document.getElementById('score-display');
+    if (!el) return;
+    const displayScore = state.gauntletMode ? state.baseScore + state.score : state.score;
+    const prev = parseInt(el.textContent || '0');
+    animateScore(el, prev, displayScore);
+  }
+
+  function endGame(mode, state) {
+    const score = state.score;
+    if (state.gauntletMode && state.onComplete) {
+      state.onComplete(score);
+      return;
+    }
+    const isNewRecord = HIGH_SCORES.set(mode, score);
+    const highScore = HIGH_SCORES.get(mode);
+    const configs = {
+      flags: { emoji: '🏳️', title: 'Time\'s Up!', accent: 'orange' },
+      capitals: { emoji: '🗺️', title: 'Time\'s Up!', accent: 'purple' },
+      pinmedown: { emoji: '📍', title: 'Round Over!', accent: 'cyan' },
+    };
+    const cfg = configs[mode];
+    navigate('end', {
+      mode,
+      score,
+      highScore,
+      isNewRecord,
+      emoji: cfg.emoji,
+      title: cfg.title,
+      onReplay: () => navigate(mode),
+      onMenu: () => navigate('menu'),
+    });
+  }
+
+  // ============================================================
+  //  INIT
+  // ============================================================
+  navigate('menu');
+  </script>
+</body>
+</html>
