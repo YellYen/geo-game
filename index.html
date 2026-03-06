@@ -413,7 +413,7 @@
     };
     const cls = colors[theme] || colors.flags;
     return options.map((opt, i) => `
-      <button class="option-btn w-full text-left px-5 py-4 rounded-2xl bg-gradient-to-r ${cls} border-2
+      <button class="option-btn w-full text-left px-5 py-4 rounded-2xl bg-gradient-to-r ${cls}
         font-body font-700 text-white text-base cursor-pointer"
         data-value="${opt}" data-idx="${i}" onclick="selectOption(this)">
         <span class="font-display text-lg mr-3 opacity-50">${['A','B','C','D'][i]}</span>
