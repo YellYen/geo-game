@@ -35,25 +35,19 @@
             wiggle: { '0%,100%': { transform: 'rotate(-3deg)' }, '50%': { transform: 'rotate(3deg)' } },
             popIn: { '0%': { transform: 'scale(0.8)', opacity: '0' }, '70%': { transform: 'scale(1.05)' }, '100%': { transform: 'scale(1)', opacity: '1' } },
             float: { '0%,100%': { transform: 'translateY(0px)' }, '50%': { transform: 'translateY(-15px)' } },
-            pulse2: { '0%,100%': { opacity: '0.3' }, '50%': { opacity: '0.6' } },
             slideUp: { '0%': { transform: 'translateY(40px)', opacity: '0' }, '100%': { transform: 'translateY(0)', opacity: '1' } },
             flashGreen: { '0%,100%': { backgroundColor: 'transparent' }, '50%': { backgroundColor: 'rgba(74,222,128,0.3)' } },
-            flashRed: { '0%,100%': { backgroundColor: 'transparent' }, '50%': { backgroundColor: 'rgba(248,113,113,0.3)' } },
             confetti: { '0%': { transform: 'translateY(0) rotate(0deg)', opacity: '1' }, '100%': { transform: 'translateY(200px) rotate(720deg)', opacity: '0' } },
             scoreCount: { '0%': { transform: 'scale(1.5)', color: '#4ade80' }, '100%': { transform: 'scale(1)', color: 'inherit' } },
-            timerPulse: { '0%,100%': { boxShadow: '0 0 0 0 rgba(239,68,68,0.4)' }, '50%': { boxShadow: '0 0 0 8px rgba(239,68,68,0)' } },
           },
           animation: {
             wiggle: 'wiggle 0.4s ease-in-out',
             popIn: 'popIn 0.4s ease-out forwards',
             float: 'float 3s ease-in-out infinite',
-            pulse2: 'pulse2 3s ease-in-out infinite',
             slideUp: 'slideUp 0.5s ease-out forwards',
             flashGreen: 'flashGreen 0.6s ease-out',
-            flashRed: 'flashRed 0.6s ease-out',
             confetti: 'confetti 1s ease-out forwards',
             scoreCount: 'scoreCount 0.4s ease-out',
-            timerPulse: 'timerPulse 0.8s ease-in-out infinite',
           }
         }
       }
@@ -142,11 +136,6 @@
       pointer-events: none;
       z-index: 9999;
       animation: confetti 1s ease-out forwards;
-    }
-
-    /* Score flash */
-    .score-flash {
-      animation: scoreCount 0.4s ease-out;
     }
 
     /* Screen transitions */
@@ -243,11 +232,6 @@
     if (elapsedMs >= 10000) return 0;
     // Linear decay: 75 → 0 over 1s–10s window
     return Math.round(75 * (1 - (elapsedMs - 1000) / 9000));
-  }
-
-  function pinScore(guessLat, guessLng, actualLat, actualLng) {
-    const dist = haversineKm(guessLat, guessLng, actualLat, actualLng);
-    return Math.max(0, Math.round(100 * (1 - dist / 2000)));
   }
 
   // Wide-world scoring: map is always fully zoomed out so precision is limited.
@@ -501,7 +485,7 @@
 
     app.innerHTML = `
       <div class="min-h-screen flex flex-col theme-flags screen">
-        ${renderGameHeader('Flags of Freedom', '🏳️', 'flags', gauntletMode, baseScore)}
+        ${renderGameHeader('Flags of Freedom', '🏳️', 'flags', gauntletMode)}
         <div id="flags-content" class="flex-1 flex flex-col items-center justify-center px-4 py-6 max-w-xl mx-auto w-full"></div>
       </div>
     `;
@@ -538,7 +522,7 @@
         </div>
 
         <div class="flex items-center justify-between mb-3">
-          <p class="text-slate-400 font-body text-sm uppercase tracking-widest font-bold">Which country?</p>
+          <p class="text-slate-400 font-body text-sm uppercase tracking-widest font-bold">Which country? <span class="text-orange-400/60">Q${idx + 1}</span></p>
           <span class="text-xs font-body text-slate-500 bg-slate-800/60 rounded-full px-3 py-1">⚡ Answer fast for more points!</span>
         </div>
 
@@ -578,7 +562,7 @@
     } else {
       showFeedback('flags-feedback', false, `That was ${correct}`);
     }
-    updateScoreDisplay('flags', flagsState);
+    updateScoreDisplay(flagsState);
 
     setTimeout(() => {
       flagsState.idx++;
@@ -589,9 +573,11 @@
 
   function startFlagsTimer() {
     clearTimer();
+    flagsState.timerEndAt = Date.now() + flagsState.timeLeft * 1000;
     updateTimer('flags-timer', flagsState.timeLeft, flagsState.total, '#f97316');
     timerInterval = setInterval(() => {
-      flagsState.timeLeft--;
+      flagsState.timeLeft = Math.ceil((flagsState.timerEndAt - Date.now()) / 1000);
+      if (flagsState.timeLeft < 0) flagsState.timeLeft = 0;
       updateTimer('flags-timer', flagsState.timeLeft, flagsState.total, '#f97316');
       if (flagsState.timeLeft <= 0) {
         clearTimer();
@@ -622,7 +608,7 @@
 
     app.innerHTML = `
       <div class="min-h-screen flex flex-col theme-capitals screen">
-        ${renderGameHeader('Capital IQ', '🗺️', 'capitals', gauntletMode, baseScore)}
+        ${renderGameHeader('Capital IQ', '🗺️', 'capitals', gauntletMode)}
         <div id="capitals-content" class="flex-1 flex flex-col items-center justify-center px-4 py-6 max-w-xl mx-auto w-full"></div>
       </div>
     `;
@@ -661,7 +647,7 @@
         </div>
 
         <div class="flex items-center justify-between mb-3">
-          <p class="text-slate-400 font-body text-sm uppercase tracking-widest font-bold">Capital city?</p>
+          <p class="text-slate-400 font-body text-sm uppercase tracking-widest font-bold">Capital city? <span class="text-purple-400/60">Q${idx + 1}</span></p>
           <span class="text-xs font-body text-slate-500 bg-slate-800/60 rounded-full px-3 py-1">⚡ Answer fast for more points!</span>
         </div>
 
@@ -693,7 +679,7 @@
     } else {
       showFeedback('capitals-feedback', false, `It was ${correct}`);
     }
-    updateScoreDisplay('capitals', capitalsState);
+    updateScoreDisplay(capitalsState);
 
     setTimeout(() => {
       capitalsState.idx++;
@@ -704,9 +690,11 @@
 
   function startCapitalsTimer() {
     clearTimer();
+    capitalsState.timerEndAt = Date.now() + capitalsState.timeLeft * 1000;
     updateTimer('capitals-timer', capitalsState.timeLeft, capitalsState.total, '#a855f7');
     timerInterval = setInterval(() => {
-      capitalsState.timeLeft--;
+      capitalsState.timeLeft = Math.ceil((capitalsState.timerEndAt - Date.now()) / 1000);
+      if (capitalsState.timeLeft < 0) capitalsState.timeLeft = 0;
       updateTimer('capitals-timer', capitalsState.timeLeft, capitalsState.total, '#a855f7');
       if (capitalsState.timeLeft <= 0) {
         clearTimer();
@@ -738,7 +726,7 @@
 
     app.innerHTML = `
       <div class="flex flex-col theme-pin screen" style="height:100vh;overflow:hidden;">
-        ${renderGameHeader('Pin Me Down', '📍', 'pinmedown', gauntletMode, baseScore)}
+        ${renderGameHeader('Pin Me Down', '📍', 'pinmedown', gauntletMode)}
         <div id="pin-content" class="flex-1 flex flex-col px-3 py-2 w-full" style="min-height:0;overflow:hidden;"></div>
       </div>
     `;
@@ -895,7 +883,7 @@
       `;
     }
 
-    updateScoreDisplay('pin', pinState);
+    updateScoreDisplay(pinState);
     if (points >= 60) spawnConfetti(window.innerWidth/2, window.innerHeight * 0.6, 12);
 
     // Auto-advance after 750ms
@@ -941,9 +929,11 @@
 
   function startPinTimer() {
     clearTimer();
+    pinState.timerEndAt = Date.now() + pinState.timeLeft * 1000;
     updateTimer('pin-timer', pinState.timeLeft, pinState.total, '#22d3ee');
     timerInterval = setInterval(() => {
-      pinState.timeLeft--;
+      pinState.timeLeft = Math.ceil((pinState.timerEndAt - Date.now()) / 1000);
+      if (pinState.timeLeft < 0) pinState.timeLeft = 0;
       updateTimer('pin-timer', pinState.timeLeft, pinState.total, '#22d3ee');
       if (pinState.timeLeft <= 0) {
         clearTimer();
@@ -963,7 +953,6 @@
 
   function renderGauntlet(app, opts = {}) {
     gauntletState = {
-      phase: 'flags',
       flagsScore: 0,
       capitalsScore: 0,
       pinScore: 0,
@@ -1138,7 +1127,7 @@
   // ============================================================
   //  SHARED HELPERS
   // ============================================================
-  function renderGameHeader(title, emoji, mode, gauntletMode, baseScore) {
+  function renderGameHeader(title, emoji, mode, gauntletMode) {
     const colorMap = {
       flags: 'border-orange-800/40 text-orange-400',
       capitals: 'border-purple-800/40 text-purple-400',
@@ -1190,7 +1179,7 @@
     `;
   }
 
-  function updateScoreDisplay(mode, state) {
+  function updateScoreDisplay(state) {
     const el = document.getElementById('score-display');
     if (!el) return;
     const displayScore = state.gauntletMode ? state.baseScore + state.score : state.score;
